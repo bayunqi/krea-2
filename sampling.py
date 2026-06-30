@@ -53,6 +53,14 @@ def timesteps(seq_len, steps, x1, x2, y1=0.5, y2=1.15, sigma=1.0, mu=None):
     return ts.tolist()
 
 
+def trim_text_padding(txt, txtmask):
+    """Drop right-padding tokens so attention can run without a dense padding mask."""
+    if txtmask is None or txtmask.all():
+        return txt, txtmask
+    max_len = int(txtmask.sum(dim=1).max().item())
+    return txt[:, :max_len], txtmask[:, :max_len]
+
+
 @torch.no_grad()
 def sample(
     model,
@@ -106,6 +114,7 @@ def sample(
 
     # Positive (conditional) text conditioning.
     txt, txtmask = encoder(prompts)
+    txt, txtmask = trim_text_padding(txt, txtmask)
     txt = txt.to(device=device, dtype=dtype, non_blocking=True)
     txtmask = txtmask.to(device=device, non_blocking=True)
     x, pos, mask = prepare(noise, txt.shape[1], patch, txtmask)
@@ -114,6 +123,7 @@ def sample(
     # when guidance is disabled.
     if cfg:
         untxt, untxtmask = encoder(negative_prompts)
+        untxt, untxtmask = trim_text_padding(untxt, untxtmask)
         untxt = untxt.to(device=device, dtype=dtype, non_blocking=True)
         untxtmask = untxtmask.to(device=device, non_blocking=True)
         _, unpos, unmask = prepare(noise, untxt.shape[1], patch, untxtmask)

@@ -77,6 +77,9 @@ Torch compile is disabled by default for V100 compatibility. Set
 `K2_TORCH_COMPILE=1` only on hosts with a working Triton/Inductor stack.
 cuDNN attention is also not forced by default because V100 (`sm70`) is outside
 the cuDNN MHA supported architecture range.
+For memory efficiency on V100, K/V heads are expanded before SDPA instead of
+using PyTorch's GQA flag, and sequence padding is disabled unless
+`K2_PAD_SEQUENCE=1` or `K2_TORCH_COMPILE=1` is set.
 
 ### Options
 

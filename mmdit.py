@@ -55,6 +55,12 @@ def attention(
     scale: float | None = None,
     gqa: bool = False,
 ) -> Tensor:
+    if gqa and os.environ.get("K2_FORCE_CUDNN_ATTENTION") != "1":
+        repeats = q.shape[1] // k.shape[1]
+        k = k.repeat_interleave(repeats, dim=1)
+        v = v.repeat_interleave(repeats, dim=1)
+        gqa = False
+
     if os.environ.get("K2_FORCE_CUDNN_ATTENTION") == "1":
         with sdpa_kernel(SDPBackend.CUDNN_ATTENTION):
             x = F.scaled_dot_product_attention(
@@ -67,9 +73,18 @@ def attention(
     return rearrange(x, "B H L D -> B L (H D)")
 
 
-def _mask(mask: Tensor) -> Tensor:
+def _mask(mask: Tensor | None) -> Tensor | None:
     """Expand a (B, L) key-padding mask into a (B, 1, L, L) attention mask."""
+    if mask is None or mask.all():
+        return None
     return mask.unsqueeze(1).unsqueeze(2) * mask.unsqueeze(1).unsqueeze(3)
+
+
+def _pad_sequence_for_compile() -> bool:
+    return (
+        os.environ.get("K2_PAD_SEQUENCE") == "1"
+        or os.environ.get("K2_TORCH_COMPILE") == "1"
+    )
 
 
 def temb(
@@ -428,13 +443,14 @@ class SingleStreamDiT(nn.Module):
         txtlen, imglen = context.shape[1], img.shape[1]
         combined = torch.cat((context, img), dim=1)
 
-        # Pad combined sequence to a multiple of 256 to stabilize compiled kernel shapes.
-        fulllen = combined.shape[1]
-        _padlen = (-fulllen) % 256
-        if _padlen > 0:
-            combined = F.pad(combined, (0, 0, 0, _padlen))
-            mask = F.pad(mask, (0, _padlen), value=False)
-            pos = F.pad(pos, (0, 0, 0, _padlen))
+        if _pad_sequence_for_compile():
+            # Padding stabilizes compiled kernel shapes but increases attention memory.
+            fulllen = combined.shape[1]
+            _padlen = (-fulllen) % 256
+            if _padlen > 0:
+                combined = F.pad(combined, (0, 0, 0, _padlen))
+                mask = F.pad(mask, (0, _padlen), value=False)
+                pos = F.pad(pos, (0, 0, 0, _padlen))
 
         mask = _mask(mask)
 
@@ -446,7 +462,8 @@ class SingleStreamDiT(nn.Module):
                 combined = combined.to(block_device, non_blocking=True)
                 tvec = tvec.to(block_device, non_blocking=True)
                 freqs = freqs.to(block_device, non_blocking=True)
-                mask = mask.to(block_device, non_blocking=True)
+                if mask is not None:
+                    mask = mask.to(block_device, non_blocking=True)
             combined = block(combined, tvec, freqs, mask)
 
         last_device = _module_device(self.last, combined.device)
