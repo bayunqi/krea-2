@@ -62,8 +62,9 @@ uv run inference.py "a fox walking in the snow" \
 
 ### V100 multi-GPU
 
-On 4x V100 hosts, use float16 and split the DiT blocks across several GPUs while
-keeping the Qwen text encoder on a separate GPU:
+On 4x V100 hosts, `uv run` uses the pinned Python 3.11 + PyTorch CUDA 12.1
+environment from `pyproject.toml` / `uv.lock`. Use float16 and split the DiT
+blocks across several GPUs while keeping the Qwen text encoder on a separate GPU:
 
 ```bash
 CUDA_VISIBLE_DEVICES=0,1,2,3 uv run inference.py "a fox walking in the snow" \
