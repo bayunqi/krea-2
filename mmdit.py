@@ -55,7 +55,12 @@ def attention(
     scale: float | None = None,
     gqa: bool = False,
 ) -> Tensor:
-    with sdpa_kernel(SDPBackend.CUDNN_ATTENTION):
+    if os.environ.get("K2_FORCE_CUDNN_ATTENTION") == "1":
+        with sdpa_kernel(SDPBackend.CUDNN_ATTENTION):
+            x = F.scaled_dot_product_attention(
+                q, k, v, attn_mask=mask, scale=scale, enable_gqa=gqa
+            )
+    else:
         x = F.scaled_dot_product_attention(
             q, k, v, attn_mask=mask, scale=scale, enable_gqa=gqa
         )

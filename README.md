@@ -75,6 +75,8 @@ CUDA_VISIBLE_DEVICES=0,1,2,3 uv run inference.py "a fox walking in the snow" \
 `CUDA_VISIBLE_DEVICES` remaps physical GPUs to logical `cuda:0..N` device names.
 Torch compile is disabled by default for V100 compatibility. Set
 `K2_TORCH_COMPILE=1` only on hosts with a working Triton/Inductor stack.
+cuDNN attention is also not forced by default because V100 (`sm70`) is outside
+the cuDNN MHA supported architecture range.
 
 ### Options
 
