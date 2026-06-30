@@ -51,6 +51,8 @@ def _pipeline(
         mmdit = SingleStreamDiT(mmdit_config)
 
     ckpt = checkpoints[checkpoint]
+    print("ckpt =", ckpt)
+    print("exists =", ckpt.exists() if hasattr(ckpt, "exists") else os.path.exists(ckpt))
     mmdit.load_state_dict(load_file(ckpt), strict=True, assign=True)
     mmdit = mmdit.to(device=device, dtype=dtype).eval().requires_grad_(False)
     ae = ae.to(device=device, dtype=dtype).eval().requires_grad_(False)
