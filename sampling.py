@@ -1,6 +1,7 @@
 """Functional flow-matching sampler for the K2 MMDiT (no Scheduler class)."""
 
 import math
+import time
 
 import torch
 from einops import rearrange, repeat
@@ -135,7 +136,9 @@ def sample(
 
     # Euler integration of the flow ODE with CFG.
     img = x
-    for tcurr, tprev in zip(ts[:-1], ts[1:]):
+    total_start = time.perf_counter()
+    for step_idx, (tcurr, tprev) in enumerate(zip(ts[:-1], ts[1:]), start=1):
+        step_start = time.perf_counter()
         t = torch.full((len(img),), tcurr, dtype=img.dtype, device=img.device)
         cond = model(img=img, context=txt, t=t, pos=pos, mask=mask)
         if cfg:
@@ -144,8 +147,14 @@ def sample(
         else:
             v = cond
         img = img + (tprev - tcurr) * v
+        if device.startswith("cuda"):
+            torch.cuda.synchronize(torch.device(device))
+        elapsed = time.perf_counter() - step_start
+        print(f"[sample] step {step_idx}/{steps} finished in {elapsed:.1f}s", flush=True)
 
     # Unpatchify back to a latent and decode to pixels.
+    print(f"[sample] denoising finished in {time.perf_counter() - total_start:.1f}s", flush=True)
+    print("[sample] decoding image", flush=True)
     img = rearrange(
         img,
         "b (h w) (c ph pw) -> b c (h ph) (w pw)",
@@ -154,7 +163,7 @@ def sample(
         h=height // (ae.compression * patch),
         w=width // (ae.compression * patch),
     )
-    img = ae.decode(img.to(torch.bfloat16))
+    img = ae.decode(img.to(dtype=dtype))
     img = img.clamp(-1, 1) * 0.5 + 0.5
     img = rearrange(img * 255.0, "b c h w -> b h w c").cpu().byte().numpy()
     return [Image.fromarray(img[i]) for i in range(len(img))]

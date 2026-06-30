@@ -25,4 +25,6 @@ class QwenAutoencoder(nn.Module):
     def decode(self, x: Tensor) -> Tensor:
         x = rearrange(x, "b c h w -> b c 1 h w")
         x = (x * self.latents_std) + self.latents_mean
+        ae_dtype = next(self.ae.parameters()).dtype
+        x = x.to(dtype=ae_dtype)
         return rearrange(self.ae.decode(x).sample, "b c 1 h w -> b c h w")
