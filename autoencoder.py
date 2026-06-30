@@ -13,8 +13,14 @@ class QwenAutoencoder(nn.Module):
         self.ae = AutoencoderKLQwenImage.from_pretrained("Qwen/Qwen-Image", subfolder="vae")
         self.compression = 8
         self.channels = 16
-        self.register_buffer("latents_mean", torch.tensor(self.ae.latents_mean).view(1, -1, 1, 1, 1))
-        self.register_buffer("latents_std", torch.tensor(self.ae.latents_std).view(1, -1, 1, 1, 1))
+        self.register_buffer(
+            "latents_mean",
+            torch.tensor(self.ae.config.latents_mean).view(1, -1, 1, 1, 1),
+        )
+        self.register_buffer(
+            "latents_std",
+            torch.tensor(self.ae.config.latents_std).view(1, -1, 1, 1, 1),
+        )
 
     def decode(self, x: Tensor) -> Tensor:
         x = rearrange(x, "b c h w -> b c 1 h w")

@@ -12,6 +12,7 @@ dependencies = [
     "einops>=0.7.0",
     "diffusers>=0.32.0",
     "click>=8.4.1",
+    "accelerate>=0.34.0",
 ]
 
 [[tool.uv.index]]

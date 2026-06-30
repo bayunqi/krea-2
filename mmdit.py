@@ -9,6 +9,13 @@ from torch import Tensor
 from torch.nn.attention import SDPBackend, sdpa_kernel
 
 
+def _module_device(module: torch.nn.Module, fallback: torch.device) -> torch.device:
+    try:
+        return next(module.parameters()).device
+    except StopIteration:
+        return fallback
+
+
 def rope(pos: Tensor, dim: int, theta: float = 1e4, ntk: float = 1.0) -> Tensor:
     scale = torch.arange(0, dim, 2, dtype=torch.float64, device=pos.device) / dim
     omega = 1.0 / ((theta * ntk) ** scale)
@@ -384,6 +391,15 @@ class SingleStreamDiT(nn.Module):
         pos: Tensor,
         mask: Tensor | None = None,
     ) -> Tensor:
+        output_device = img.device
+        first_device = _module_device(self.first, output_device)
+        img = img.to(first_device, non_blocking=True)
+        context = context.to(first_device, non_blocking=True)
+        t = t.to(first_device, non_blocking=True)
+        pos = pos.to(first_device, non_blocking=True)
+        if mask is not None:
+            mask = mask.to(first_device, non_blocking=True)
+
         img = self.first(img)
         t = self.tmlp(temb(t, self.config.tdim, device=img.device, dtype=img.dtype))
         tvec = self.tproj(t)
@@ -409,9 +425,19 @@ class SingleStreamDiT(nn.Module):
         freqs = self.posemb(pos)
 
         for block in self.blocks:
+            block_device = _module_device(block, combined.device)
+            if combined.device != block_device:
+                combined = combined.to(block_device, non_blocking=True)
+                tvec = tvec.to(block_device, non_blocking=True)
+                freqs = freqs.to(block_device, non_blocking=True)
+                mask = mask.to(block_device, non_blocking=True)
             combined = block(combined, tvec, freqs, mask)
 
+        last_device = _module_device(self.last, combined.device)
+        if combined.device != last_device:
+            combined = combined.to(last_device, non_blocking=True)
+            t = t.to(last_device, non_blocking=True)
         final = self.last(combined, t)
         output = final[:, txtlen : txtlen + imglen, :]
 
-        return output
+        return output.to(output_device, non_blocking=True)

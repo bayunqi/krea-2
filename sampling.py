@@ -106,12 +106,16 @@ def sample(
 
     # Positive (conditional) text conditioning.
     txt, txtmask = encoder(prompts)
+    txt = txt.to(device=device, dtype=dtype, non_blocking=True)
+    txtmask = txtmask.to(device=device, non_blocking=True)
     x, pos, mask = prepare(noise, txt.shape[1], patch, txtmask)
 
     # The unconditional branch is only used for CFG; skip encoding/prep entirely
     # when guidance is disabled.
     if cfg:
         untxt, untxtmask = encoder(negative_prompts)
+        untxt = untxt.to(device=device, dtype=dtype, non_blocking=True)
+        untxtmask = untxtmask.to(device=device, non_blocking=True)
         _, unpos, unmask = prepare(noise, untxt.shape[1], patch, untxtmask)
 
     # min_res/max_res define the (x1,y1)-(x2,y2) interpolation endpoints for `mu`.

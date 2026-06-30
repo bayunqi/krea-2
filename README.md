@@ -60,6 +60,19 @@ uv run inference.py "a fox walking in the snow" \
     --checkpoint oss_turbo --steps 8 --cfg 0.0 --mu 1.15 --width 2048 --height 2048
 ```
 
+### V100 multi-GPU
+
+On 4x V100 hosts, use float16 and split the DiT blocks across several GPUs while
+keeping the Qwen text encoder on a separate GPU:
+
+```bash
+CUDA_VISIBLE_DEVICES=0,1,2,3 uv run inference.py "a fox walking in the snow" \
+    --checkpoint oss_turbo --steps 8 --cfg 0.0 --mu 1.15 --width 2048 --height 2048 \
+    --device cuda:0 --text-device cuda:1 --dit-devices cuda:0,cuda:2,cuda:3 --dtype float16
+```
+
+`CUDA_VISIBLE_DEVICES` remaps physical GPUs to logical `cuda:0..N` device names.
+
 ### Options
 
 | Flag | Default | Description |
@@ -73,8 +86,12 @@ uv run inference.py "a fox walking in the snow" \
 | `--width` / `--height` | `1024` ~ `2048` | Output resolution; padded up to a multiple of 16 if needed. |
 | `--num-images` | `1` | Number of images to generate from the prompt. |
 | `--seed` | `0` | Base seed; image *i* uses `seed + i`. |
-| `--checkpoint` | `oss_raw` | Checkpoint to load (`oss_raw`, `oss_turbo`). Defaults to `$K2_CHECKPOINT`. |
+| `--checkpoint` | `oss_raw` | Checkpoint to load (`oss_raw`, `oss_turbo`, or a file path). Defaults to `$K2_CHECKPOINT`. |
 | `--output` | `sample` | Output filename prefix. |
+| `--device` | `cuda:0` | Device for latent sampling and VAE decode. |
+| `--text-device` | auto | Device for the Qwen text encoder; defaults to another CUDA device when available. |
+| `--dit-devices` | `--device` | Comma-separated devices for DiT block sharding, e.g. `cuda:0,cuda:2,cuda:3`. |
+| `--dtype` | `auto` | Inference dtype. `auto` uses `float16` on V100 and `bfloat16` on Ampere+. |
 
 
 ## Documentation
