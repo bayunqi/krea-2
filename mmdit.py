@@ -469,6 +469,7 @@ class SingleStreamDiT(nn.Module):
         last_device = _module_device(self.last, combined.device)
         if combined.device != last_device:
             combined = combined.to(last_device, non_blocking=True)
+        if t.device != last_device:
             t = t.to(last_device, non_blocking=True)
         final = self.last(combined, t)
         output = final[:, txtlen : txtlen + imglen, :]
