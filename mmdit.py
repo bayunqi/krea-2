@@ -47,11 +47,26 @@ def ropeapply(xq: Tensor, xk: Tensor, freqs: Tensor) -> tuple[Tensor, Tensor]:
     return xq_.reshape(*xq.shape).to(xq.dtype), xk_.reshape(*xk.shape).to(xk.dtype)
 
 
+def _torch_version_at_least(major: int, minor: int) -> bool:
+    try:
+        version = torch.__version__.split("+", 1)[0]
+        parts = version.split(".")
+        return (int(parts[0]), int(parts[1])) >= (major, minor)
+    except (IndexError, ValueError):
+        return False
+
+
 def _expand_gqa_for_sdpa(q: Tensor) -> bool:
-    if os.environ.get("K2_NATIVE_GQA") == "1":
+    mode = os.environ.get("K2_GQA_MODE", "auto").lower()
+    if mode == "expand" or os.environ.get("K2_FORCE_GQA_EXPAND") == "1":
+        return True
+    if mode == "native" or os.environ.get("K2_NATIVE_GQA") == "1":
         return False
     if os.environ.get("K2_FORCE_CUDNN_ATTENTION") == "1":
         return False
+    if q.device.type == "cuda":
+        major, _ = torch.cuda.get_device_capability(q.device)
+        return not (major >= 9 and _torch_version_at_least(2, 7))
     return True
 
 

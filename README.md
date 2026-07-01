@@ -84,8 +84,9 @@ using PyTorch's GQA flag, and sequence padding is disabled unless
 ### H100
 
 On H100-SXM-80GB, start with a single visible GPU and `--dtype auto`; this uses
-bfloat16 and expands GQA K/V heads before SDPA so PyTorch can use an efficient
-attention kernel instead of allocating a dense attention matrix:
+bfloat16 and the CUDA 12.6 PyTorch wheel pinned in `uv.lock`. The default GQA
+mode is `auto`: H100 with newer PyTorch uses native GQA, while older CUDA
+architectures expand K/V heads before SDPA.
 
 ```bash
 CUDA_VISIBLE_DEVICES=0 uv run inference.py "a fox walking in the snow" \
@@ -94,9 +95,9 @@ CUDA_VISIBLE_DEVICES=0 uv run inference.py "a fox walking in the snow" \
 ```
 
 If your Triton/Inductor stack is working, you can optionally test
-`K2_TORCH_COMPILE=1` after the eager path succeeds. Native PyTorch GQA can be
-tested with `K2_NATIVE_GQA=1`, but with PyTorch 2.5.1 it may fall back to a
-memory-heavy attention path at 2048px.
+`K2_TORCH_COMPILE=1` after the eager path succeeds. If native GQA regresses or
+OOMs, set `K2_GQA_MODE=expand` to use the fallback path that avoids PyTorch's
+native GQA flag.
 
 ### Options
 
