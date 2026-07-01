@@ -56,18 +56,33 @@ def _torch_version_at_least(major: int, minor: int) -> bool:
         return False
 
 
-def _expand_gqa_for_sdpa(q: Tensor) -> bool:
+def _cuda_major(device: torch.device) -> int | None:
+    if device.type != "cuda":
+        return None
+    major, _ = torch.cuda.get_device_capability(device)
+    return major
+
+
+def _use_cudnn_attention(q: Tensor) -> bool:
+    mode = os.environ.get("K2_ATTENTION_BACKEND", "auto").lower()
+    if mode == "cudnn" or os.environ.get("K2_FORCE_CUDNN_ATTENTION") == "1":
+        return True
+    if mode in {"sdpa", "default"}:
+        return False
+    major = _cuda_major(q.device)
+    return major is not None and major >= 8
+
+
+def _expand_gqa_for_sdpa(q: Tensor, use_cudnn: bool) -> bool:
     mode = os.environ.get("K2_GQA_MODE", "auto").lower()
     if mode == "expand" or os.environ.get("K2_FORCE_GQA_EXPAND") == "1":
         return True
     if mode == "native" or os.environ.get("K2_NATIVE_GQA") == "1":
         return False
-    if os.environ.get("K2_FORCE_CUDNN_ATTENTION") == "1":
+    if use_cudnn:
         return False
-    if q.device.type == "cuda":
-        major, _ = torch.cuda.get_device_capability(q.device)
-        return not (major >= 9 and _torch_version_at_least(2, 7))
-    return True
+    major = _cuda_major(q.device)
+    return not (major is not None and major >= 9 and _torch_version_at_least(2, 7))
 
 
 def attention(
@@ -78,13 +93,14 @@ def attention(
     scale: float | None = None,
     gqa: bool = False,
 ) -> Tensor:
-    if gqa and _expand_gqa_for_sdpa(q):
+    use_cudnn = _use_cudnn_attention(q)
+    if gqa and _expand_gqa_for_sdpa(q, use_cudnn):
         repeats = q.shape[1] // k.shape[1]
         k = k.repeat_interleave(repeats, dim=1)
         v = v.repeat_interleave(repeats, dim=1)
         gqa = False
 
-    if os.environ.get("K2_FORCE_CUDNN_ATTENTION") == "1":
+    if use_cudnn:
         with sdpa_kernel(SDPBackend.CUDNN_ATTENTION):
             x = F.scaled_dot_product_attention(
                 q, k, v, attn_mask=mask, scale=scale, enable_gqa=gqa
@@ -104,10 +120,7 @@ def _mask(mask: Tensor | None) -> Tensor | None:
 
 
 def _pad_sequence_for_compile() -> bool:
-    return (
-        os.environ.get("K2_PAD_SEQUENCE") == "1"
-        or os.environ.get("K2_TORCH_COMPILE") == "1"
-    )
+    return os.environ.get("K2_PAD_SEQUENCE", "1") != "0"
 
 
 def temb(
