@@ -98,6 +98,8 @@ If your Triton/Inductor stack is working, you can optionally test
 `K2_TORCH_COMPILE=1` after the eager path succeeds. For experiments, set
 `K2_ATTENTION_BACKEND=sdpa` to bypass cuDNN, or `K2_GQA_MODE=expand` to avoid
 PyTorch's native GQA flag.
+Keep the default full text sequence for fidelity with the original inference
+path. `K2_TRIM_TEXT_PADDING=1` is available only as a memory experiment.
 
 ### Options
 

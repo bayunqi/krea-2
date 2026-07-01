@@ -1,6 +1,7 @@
 """Functional flow-matching sampler for the K2 MMDiT (no Scheduler class)."""
 
 import math
+import os
 import time
 
 import torch
@@ -56,6 +57,8 @@ def timesteps(seq_len, steps, x1, x2, y1=0.5, y2=1.15, sigma=1.0, mu=None):
 
 def trim_text_padding(txt, txtmask):
     """Drop right-padding tokens so attention can run without a dense padding mask."""
+    if os.environ.get("K2_TRIM_TEXT_PADDING") != "1":
+        return txt, txtmask
     if txtmask is None or txtmask.all():
         return txt, txtmask
     max_len = int(txtmask.sum(dim=1).max().item())
