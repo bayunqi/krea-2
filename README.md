@@ -81,6 +81,20 @@ For memory efficiency on V100, K/V heads are expanded before SDPA instead of
 using PyTorch's GQA flag, and sequence padding is disabled unless
 `K2_PAD_SEQUENCE=1` or `K2_TORCH_COMPILE=1` is set.
 
+### H100
+
+On H100-SXM-80GB, start with a single visible GPU and `--dtype auto`; this uses
+bfloat16 and lets PyTorch select the H100-capable SDPA backend:
+
+```bash
+CUDA_VISIBLE_DEVICES=0 uv run inference.py "a fox walking in the snow" \
+    --checkpoint oss_turbo --steps 8 --cfg 0.0 --mu 1.15 --width 2048 --height 2048 \
+    --device cuda:0 --text-device cuda:0 --dtype auto
+```
+
+If your Triton/Inductor stack is working, you can optionally test
+`K2_TORCH_COMPILE=1` after the eager path succeeds.
+
 ### Options
 
 | Flag | Default | Description |

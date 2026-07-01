@@ -47,6 +47,17 @@ def ropeapply(xq: Tensor, xk: Tensor, freqs: Tensor) -> tuple[Tensor, Tensor]:
     return xq_.reshape(*xq.shape).to(xq.dtype), xk_.reshape(*xk.shape).to(xk.dtype)
 
 
+def _expand_gqa_for_legacy_cuda(q: Tensor) -> bool:
+    if os.environ.get("K2_FORCE_GQA_EXPAND") == "1":
+        return True
+    if os.environ.get("K2_FORCE_CUDNN_ATTENTION") == "1":
+        return False
+    if q.device.type != "cuda":
+        return True
+    major, _ = torch.cuda.get_device_capability(q.device)
+    return major < 8
+
+
 def attention(
     q: Tensor,
     k: Tensor,
@@ -55,7 +66,7 @@ def attention(
     scale: float | None = None,
     gqa: bool = False,
 ) -> Tensor:
-    if gqa and os.environ.get("K2_FORCE_CUDNN_ATTENTION") != "1":
+    if gqa and _expand_gqa_for_legacy_cuda(q):
         repeats = q.shape[1] // k.shape[1]
         k = k.repeat_interleave(repeats, dim=1)
         v = v.repeat_interleave(repeats, dim=1)
